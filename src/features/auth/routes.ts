@@ -12,7 +12,7 @@ import { authMiddleware } from "../../core/middleware/auth";
 const auth = new Hono();
 
 // register
-auth.post("/register", validate(registerSchema), async (c) => {
+auth.post("/signup", validate(registerSchema), async (c) => {
   try {
     const body = c.req.valid("json") as RegisterInput;
     const result = await registerUser(body);

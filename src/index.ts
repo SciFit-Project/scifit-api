@@ -22,7 +22,7 @@ app.use(
 );
 
 app.route("/api/auth", auth);
-app.get("/", (c) => c.json({ status: "ok" }));
+app.get("/", (c) => c.json({ status: "hello vercel" }));
 
 // serve(
 //   {

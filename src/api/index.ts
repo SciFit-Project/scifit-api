@@ -1,5 +1,5 @@
 import { handle } from "hono/vercel";
-import { app } from "..";
-// import { app } from "../index.js";
+// import { app } from "..";
+import { app } from "../index.js";
 
 export default handle(app);

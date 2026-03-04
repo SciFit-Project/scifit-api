@@ -1,6 +1,7 @@
 import { Context, Next } from "hono";
-import { supabase } from "../db";
 import { sign, verify } from 'hono/jwt';
+import { supabase } from "../db/index.js";
+
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 export const authMiddleware = async (c: Context, next: Next) => {

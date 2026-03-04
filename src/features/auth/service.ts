@@ -1,10 +1,10 @@
-import { db } from "../../core/db";
-import { users } from "../../core/db/schema/schema";
-import { comparePassword, hashPassword } from "./helper/hash";
-import type { LoginSchema, RegisterInput } from "./schema";
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
-import { generateToken } from "../../core/middleware/auth";
+import { LoginSchema, RegisterInput } from "./schema.js";
+import { db } from "../../core/db/index.js";
+import { users } from "../../core/db/schema/schema.js";
+import { comparePassword, hashPassword } from "./helper/hash.js";
+import { generateToken } from "../../core/middleware/auth.js";
 
 export const registerUser = async (body: RegisterInput) => {
   const normalizedEmail = body.email.toLowerCase().trim();

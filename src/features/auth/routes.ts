@@ -1,13 +1,9 @@
 import { Hono } from "hono";
-import {
-  loginSchema,
-  LoginSchema,
-  RegisterInput,
-  registerSchema,
-} from "./schema";
-import { registerUser, syncGoogleUser, userLogin } from "./service";
-import { validate } from "../../core/middleware/validator";
-import { authMiddleware } from "../../core/middleware/auth";
+import { validate } from "../../core/middleware/validator.js";
+import { LoginSchema, loginSchema, RegisterInput, registerSchema } from "./schema.js";
+import { registerUser, syncGoogleUser, userLogin } from "./service.js";
+import { authMiddleware } from "../../core/middleware/auth.js";
+
 
 const auth = new Hono();
 

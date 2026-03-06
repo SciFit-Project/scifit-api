@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { validate } from "../../core/middleware/validator.js";
 import { LoginSchema, loginSchema, RegisterInput, registerSchema } from "./schema.js";
-import { registerUser, syncGoogleUser, userLogin } from "./service.js";
+import { getProfile, registerUser, syncGoogleUser, userLogin } from "./service.js";
 import { authMiddleware } from "../../core/middleware/auth.js";
 
 
@@ -37,8 +37,21 @@ auth.post("/google-sync", async (c) => {
   return c.json({ success: true, data: result }, 201);
 });
 
-auth.get("/test", authMiddleware, async (c) => {
-  return c.json("validated");
+auth.get("/me", authMiddleware, async (c) => {
+  try {
+    const user = c.get("user" as any);
+    console.log(typeof user.id);
+    const response = await getProfile(user.id);
+    if (!user) {
+      return c.json({ success: false, message: "Unauthorized" }, 401);
+    }
+    return c.json({ success: true, ...response }, 200);
+
+  } catch (error: any) {
+    const status = error.status || 500;
+    const message = error.message || "Internal Server Error";
+    return c.json({ success: false, message: message }, status);
+  }
 });
 
 export default auth;

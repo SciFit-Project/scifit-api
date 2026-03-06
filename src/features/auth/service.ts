@@ -101,3 +101,17 @@ export const userLogin = async (body: LoginSchema) => {
   });
   return { token };
 };
+
+export const getProfile = async (id: string) => {
+  const [user] = await db.select({
+    "email": users.email,
+    "fullName": users.fullName,
+    "avatarUrl": users.avatarUrl,
+  }).from(users).where(eq(users.id, id));
+
+  if (!user) {
+    throw { message: "User not found", status: 404 };
+  }
+
+  return { user };
+};

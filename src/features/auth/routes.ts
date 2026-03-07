@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { validate } from "../../core/middleware/validator.js";
 import { LoginSchema, loginSchema, RegisterInput, registerSchema } from "./schema.js";
-import { getProfile, registerUser, syncGoogleUser, userLogin } from "./service.js";
+import { getProfile, registerUser, syncGoogleUserLogin, syncGoogleUserRegister, userLogin } from "./service.js";
 import { authMiddleware } from "../../core/middleware/auth.js";
 
 
@@ -31,10 +31,16 @@ auth.post("/login", validate(loginSchema), async (c) => {
     return c.json({ success: false, message: message }, status);
   }
 });
-auth.post("/google-sync", async (c) => {
+auth.post("/google-sync-login", async (c) => {
   const body = await c.req.json();
-  const result = await syncGoogleUser(body);
+  const result = await syncGoogleUserLogin(body);
   return c.json({ success: true, data: result }, 201);
+});
+
+auth.post("/google-sync-register", async (c) => {
+  const body = await c.req.json();
+  const result = await syncGoogleUserRegister(body);
+  return c.json({ success: true, data: result }, 200);
 });
 
 auth.get("/me", authMiddleware, async (c) => {

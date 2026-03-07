@@ -46,29 +46,44 @@ export const registerUser = async (body: RegisterInput) => {
   }
 };
 
-export const syncGoogleUser = async (body: any) => {
-  try {
-    await db
-      .insert(users)
-      .values({
-        id: body.id,
-        email: body.email,
-        fullName: body.fullname,
-        avatarUrl: body.avatar,
-        provider: "google",
-      })
-      .returning({
-        id: users.id,
-        fullName: users.fullName,
-        email: users.email,
-        role: users.role,
-      });
+// Find User
+const findUserById = async (id: string) => {
+  const [user] = await db.select().from(users).where(eq(users.id, id));
+  return user;
+};
 
-    throw { success: true };
-  } catch (error) {
-    console.error("Registration Error:", error);
-    throw { message: "Internal Server Error", status: 500 };
+export const syncGoogleUserLogin = async (body: any) => {
+  const existingUser = await findUserById(body.id);
+  if (!existingUser) {
+    throw { message: "Account not found. Please register first.", status: 404 };
   }
+
+  await db
+    .update(users)
+    .set({ fullName: body.fullname, avatarUrl: body.avatar })
+    .where(eq(users.id, body.id));
+
+  return existingUser;
+};
+
+export const syncGoogleUserRegister = async (body: any) => {
+  const existingUser = await findUserById(body.id);
+  if (existingUser) {
+    throw { message: "Account already exists. Please login.", status: 409 };
+  }
+
+  const [newUser] = await db
+    .insert(users)
+    .values({
+      id: body.id,
+      email: body.email,
+      fullName: body.fullname,
+      avatarUrl: body.avatar,
+      provider: "google",
+    })
+    .returning();
+
+  return newUser;
 };
 
 export const userLogin = async (body: LoginSchema) => {
@@ -103,11 +118,14 @@ export const userLogin = async (body: LoginSchema) => {
 };
 
 export const getProfile = async (id: string) => {
-  const [user] = await db.select({
-    "email": users.email,
-    "fullName": users.fullName,
-    "avatarUrl": users.avatarUrl,
-  }).from(users).where(eq(users.id, id));
+  const [user] = await db
+    .select({
+      email: users.email,
+      fullName: users.fullName,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(users)
+    .where(eq(users.id, id));
 
   if (!user) {
     throw { message: "User not found", status: 404 };

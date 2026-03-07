@@ -1,13 +1,22 @@
 import { Hono } from "hono";
 import { validate } from "../../core/middleware/validator.js";
-import { LoginSchema, loginSchema, RegisterInput, registerSchema } from "./schema.js";
-import { getProfile, registerUser, syncGoogleUserLogin, syncGoogleUserRegister, userLogin } from "./service.js";
+import {
+  LoginSchema,
+  loginSchema,
+  RegisterInput,
+  registerSchema,
+} from "./schema.js";
+import {
+  getProfile,
+  registerUser,
+  syncGoogleUserLogin,
+  syncGoogleUserRegister,
+  userLogin,
+} from "./service.js";
 import { authMiddleware } from "../../core/middleware/auth.js";
-
 
 const auth = new Hono();
 
-// register
 auth.post("/signup", validate(registerSchema), async (c) => {
   try {
     const body = c.req.valid("json") as RegisterInput;
@@ -52,7 +61,6 @@ auth.get("/me", authMiddleware, async (c) => {
       return c.json({ success: false, message: "Unauthorized" }, 401);
     }
     return c.json({ success: true, ...response }, 200);
-
   } catch (error: any) {
     const status = error.status || 500;
     const message = error.message || "Internal Server Error";

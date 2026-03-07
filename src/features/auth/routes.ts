@@ -34,13 +34,13 @@ auth.post("/login", validate(loginSchema), async (c) => {
 auth.post("/google-sync-login", async (c) => {
   const body = await c.req.json();
   const result = await syncGoogleUserLogin(body);
-  return c.json({ success: true, data: result }, 201);
+  return c.json({ success: true, data: result }, 200);
 });
 
 auth.post("/google-sync-register", async (c) => {
   const body = await c.req.json();
   const result = await syncGoogleUserRegister(body);
-  return c.json({ success: true, data: result }, 200);
+  return c.json({ success: true, data: result }, 201);
 });
 
 auth.get("/me", authMiddleware, async (c) => {

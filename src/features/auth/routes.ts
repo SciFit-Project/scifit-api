@@ -13,7 +13,8 @@ import {
   syncGoogleUserRegister,
   userLogin,
 } from "./service.js";
-import { authMiddleware } from "../../core/middleware/auth.js";
+import { authMiddleware, refreshSession } from "../../core/middleware/auth.js";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 const auth = new Hono();
 
@@ -32,18 +33,27 @@ auth.post("/signup", validate(registerSchema), async (c) => {
 auth.post("/login", validate(loginSchema), async (c) => {
   try {
     const body = c.req.valid("json") as LoginSchema;
-    const result = await userLogin(body);
-    return c.json({ success: true, ...result }, 200);
+    const { accessToken, refreshToken } = await userLogin(body);
+
+    setCookie(c, "refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    return c.json({ success: true, accessToken }, 200);
   } catch (error: any) {
     const status = error.status || 500;
     const message = error.message || "Internal Server Error";
     return c.json({ success: false, message: message }, status);
   }
 });
-auth.post("/google-sync-login", async (c) => {
-  const body = await c.req.json();
-  const result = await syncGoogleUserLogin(body);
-  return c.json({ success: true, data: result }, 200);
+
+auth.post("/google-sync-login", authMiddleware, async (c) => {
+  const user = c.get("user" as any);
+  const result = await syncGoogleUserLogin(user.id);
+  return c.json({ success: true, user: result }, 200);
 });
 
 auth.post("/google-sync-register", async (c) => {
@@ -52,10 +62,36 @@ auth.post("/google-sync-register", async (c) => {
   return c.json({ success: true, data: result }, 201);
 });
 
+auth.post("/logout", async (c) => {
+  deleteCookie(c, "refreshToken", {
+    path: "/",
+    secure: true,
+    httpOnly: true,
+    sameSite: "Lax",
+  });
+  return c.json({ message: "Logged out successfully" });
+});
+
+auth.post("/refresh", async (c) => {
+  const refreshToken = getCookie(c, "refreshToken");
+
+  if (!refreshToken) return c.json({ message: "No refresh token" }, 401);
+
+  const result = await refreshSession(refreshToken);
+
+  if (!result) {
+    return c.json({ message: "Invalid or expired refresh token" }, 401);
+  }
+
+  return c.json({
+    accessToken: result.accessToken,
+    user: result.user,
+  });
+});
+
 auth.get("/me", authMiddleware, async (c) => {
   try {
     const user = c.get("user" as any);
-    console.log(typeof user.id);
     const response = await getProfile(user.id);
     if (!user) {
       return c.json({ success: false, message: "Unauthorized" }, 401);

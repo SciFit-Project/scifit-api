@@ -4,7 +4,7 @@ import { LoginSchema, RegisterInput } from "./schema.js";
 import { db } from "../../core/db/index.js";
 import { users } from "../../core/db/schema/schema.js";
 import { comparePassword, hashPassword } from "./helper/hash.js";
-import { generateToken } from "../../core/middleware/auth.js";
+import { generateTokens } from "../../core/middleware/auth.js";
 
 export const registerUser = async (body: RegisterInput) => {
   const normalizedEmail = body.email.toLowerCase().trim();
@@ -46,24 +46,21 @@ export const registerUser = async (body: RegisterInput) => {
   }
 };
 
-// Find User
 const findUserById = async (id: string) => {
   const [user] = await db.select().from(users).where(eq(users.id, id));
   return user;
 };
 
 export const syncGoogleUserLogin = async (body: any) => {
-  const existingUser = await findUserById(body.id);
+  const existingUser = await findUserById(body);
   if (!existingUser) {
     throw { message: "Account not found. Please register first.", status: 404 };
   }
-
-  await db
-    .update(users)
-    .set({ fullName: body.fullname, avatarUrl: body.avatar })
-    .where(eq(users.id, body.id));
-
-  return existingUser;
+  return {
+    email: existingUser.email,
+    fullName: existingUser.fullName,
+    avatarUrl: existingUser.avatarUrl,
+  };
 };
 
 export const syncGoogleUserRegister = async (body: any) => {
@@ -108,13 +105,17 @@ export const userLogin = async (body: LoginSchema) => {
     throw { message: "Invalid credentials", status: 401 };
   }
 
-  // Generate token
-  const token = await generateToken({
+  const { accessToken } = await generateTokens({
     id: user.id,
     email: user.email,
     role: user.role,
   });
-  return { token };
+
+  const { refreshToken } = await generateTokens({
+    id: user.id,
+  });
+
+  return { accessToken, refreshToken };
 };
 
 export const getProfile = async (id: string) => {

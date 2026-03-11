@@ -5,9 +5,9 @@ import { logger } from "hono/logger";
 import auth from "./features/auth/routes.js";
 import user from "./features/users/routes.js";
 import exercises from "./features/exercises/routes.js";
-import workout from "./features/workouts/routes.js";
 import sessions from "./features/sessions/routes.js";
 import health from "./features/healths/routes.js";
+import plan from "./features/plan/routes.js";
 
 const app = new Hono();
 
@@ -29,7 +29,7 @@ app.route("/api/users", user);
 
 app.route("/api/exercises", exercises);
 
-app.route("/api/plans", workout);
+app.route("/api/plans", plan);
 
 app.route("/api/sessions", sessions);
 

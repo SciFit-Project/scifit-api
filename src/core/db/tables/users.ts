@@ -14,7 +14,7 @@ export const users = pgTable("users", {
     avatarUrl: text("avatar_url"),
     provider: providerEnum("provider").notNull().default("email"),
     role: roleEnum("role").notNull().default("user"),
-    gender: genderEnum("gender").notNull(),
+    gender: genderEnum("gender"),
     age: integer("age"),
     weightKg: real("weight_kg"),
     heightCm: real("height_cm"),

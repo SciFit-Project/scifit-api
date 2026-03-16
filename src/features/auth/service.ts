@@ -2,9 +2,9 @@ import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { LoginSchema, RegisterInput } from "./schema.js";
 import { db } from "../../core/db/index.js";
-import { users } from "../../core/db/schema/schema.js";
 import { comparePassword, hashPassword } from "./helper/hash.js";
 import { generateTokens } from "../../core/middleware/auth.js";
+import { users } from "../../core/db/tables/users.js";
 
 export const registerUser = async (body: RegisterInput) => {
   const normalizedEmail = body.email.toLowerCase().trim();
@@ -29,7 +29,7 @@ export const registerUser = async (body: RegisterInput) => {
         id: userId,
         email: normalizedEmail,
         fullName: body.fullname,
-        password: hashed,
+        passwordHash: hashed,
         provider: "email",
       })
       .returning({
@@ -96,7 +96,7 @@ export const userLogin = async (body: LoginSchema) => {
 
   const isPasswordCorrect = await comparePassword(
     body.password,
-    user.password!,
+    user.passwordHash!,
   );
   if (!isPasswordCorrect) {
     throw { message: "Invalid credentials", status: 401 };

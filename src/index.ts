@@ -40,10 +40,11 @@ app.get("/", (c) => c.json({ status: "ok" }));
 serve(
   {
     fetch: app.fetch,
+    hostname: "0.0.0.0",
     port: 8080,
   },
   (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
+    console.log(`Server is running on http://0.0.0.0:${info.port}`);
   },
 );
 

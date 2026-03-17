@@ -1,7 +1,7 @@
 import { Context, Next } from "hono";
 import { sign, verify } from "hono/jwt";
 import { db, supabase } from "../db/index.js";
-import { users } from "../db/schema/schema.js";
+import { users } from "../db/tables/users.js";
 import { eq } from "drizzle-orm";
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";

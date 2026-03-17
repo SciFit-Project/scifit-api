@@ -15,6 +15,13 @@ const serializeUser = (user: {
   avatarUrl: string | null;
   role: string | null;
   provider: string | null;
+  gender?: string | null;
+  age?: number | null;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  experienceLevel?: string | null;
+  goal?: string | null;
+  onboardingCompleted?: boolean | null;
 }) => ({
   id: user.id,
   email: user.email,
@@ -22,6 +29,13 @@ const serializeUser = (user: {
   avatarUrl: user.avatarUrl,
   role: user.role,
   provider: user.provider,
+  gender: user.gender,
+  age: user.age,
+  weightKg: user.weightKg,
+  heightCm: user.heightCm,
+  experienceLevel: user.experienceLevel,
+  goal: user.goal,
+  onboardingCompleted: user.onboardingCompleted ?? false,
 });
 
 export const registerUser = async (body: RegisterInput) => {
@@ -78,7 +92,7 @@ const buildGoogleProfile = (
   authUser: {
     id: string;
     email?: string;
-    role?: string;
+    role?: "user" | "admin";
     fullName?: string;
     avatarUrl?: string;
   },
@@ -92,7 +106,7 @@ const buildGoogleProfile = (
 
   const fullName = input?.fullname?.trim() || authUser.fullName || email;
   const avatarUrl = input?.avatar || authUser.avatarUrl || null;
-  const role = authUser.role || "user";
+  const role: "user" | "admin" = authUser.role || "user";
 
   return {
     id: authUser.id,
@@ -129,7 +143,7 @@ export const syncGoogleUser = async (
   authUser: {
     id: string;
     email?: string;
-    role?: string;
+    role?: "user" | "admin";
     fullName?: string;
     avatarUrl?: string;
   },
@@ -166,7 +180,7 @@ export const syncGoogleUserLogin = async (
   authUser: {
     id: string;
     email?: string;
-    role?: string;
+    role?: "user" | "admin";
     fullName?: string;
     avatarUrl?: string;
   },
@@ -179,7 +193,7 @@ export const syncGoogleUserRegister = async (
   authUser: {
     id: string;
     email?: string;
-    role?: string;
+    role?: "user" | "admin";
     fullName?: string;
     avatarUrl?: string;
   },
@@ -223,6 +237,13 @@ export const getProfile = async (id: string) => {
       avatarUrl: users.avatarUrl,
       role: users.role,
       provider: users.provider,
+      gender: users.gender,
+      age: users.age,
+      weightKg: users.weightKg,
+      heightCm: users.heightCm,
+      experienceLevel: users.experienceLevel,
+      goal: users.goal,
+      onboardingCompleted: users.onboardingCompleted,
     })
     .from(users)
     .where(eq(users.id, id));

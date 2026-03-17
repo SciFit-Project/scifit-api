@@ -64,16 +64,27 @@ export const updateProfile = async (
   userId: string,
   body: UpdateProfileInput,
 ) => {
+  const isOnboardingPayload =
+    body.age != null &&
+    body.height != null &&
+    body.weight != null &&
+    body.gender != null &&
+    body.plan != null &&
+    body.activity_level != null;
+
   const [updatedUser] = await db
     .update(users)
     .set({
+      fullName: body.fullname?.trim(),
       age: body.age,
       heightCm: body.height,
       weightKg: body.weight,
-      gender: mapGender(body.gender),
-      goal: mapGoal(body.plan),
-      experienceLevel: mapExperienceLevel(body.activity_level),
-      onboardingCompleted: true,
+      gender: body.gender ? mapGender(body.gender) : undefined,
+      goal: body.plan ? mapGoal(body.plan) : undefined,
+      experienceLevel: body.activity_level
+          ? mapExperienceLevel(body.activity_level)
+          : undefined,
+      onboardingCompleted: isOnboardingPayload ? true : undefined,
     })
     .where(eq(users.id, userId))
     .returning({

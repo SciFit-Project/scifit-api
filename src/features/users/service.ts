@@ -3,10 +3,10 @@ import { db } from "../../core/db/index.js";
 import { users } from "../../core/db/tables/users.js";
 import { UpdateProfileInput } from "./schema.js";
 
-const mapGender = (gender: UpdateProfileInput["gender"]) =>
+const mapGender = (gender: NonNullable<UpdateProfileInput["gender"]>) =>
   gender.toUpperCase() as "MALE" | "FEMALE";
 
-const mapGoal = (plan: UpdateProfileInput["plan"]) => {
+const mapGoal = (plan: NonNullable<UpdateProfileInput["plan"]>) => {
   switch (plan) {
     case "cutting":
       return "CUTTING" as const;
@@ -18,7 +18,7 @@ const mapGoal = (plan: UpdateProfileInput["plan"]) => {
 };
 
 const mapExperienceLevel = (
-  activityLevel: UpdateProfileInput["activity_level"],
+  activityLevel: NonNullable<UpdateProfileInput["activity_level"]>,
 ) => {
   switch (activityLevel) {
     case "sedentary":

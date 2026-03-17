@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { validate } from "../../core/middleware/validator.js";
 import {
+  GoogleSyncInput,
   LoginSchema,
+  googleSyncSchema,
   loginSchema,
   RegisterInput,
   registerSchema,
@@ -9,6 +11,7 @@ import {
 import {
   getProfile,
   registerUser,
+  syncGoogleUser,
   syncGoogleUserLogin,
   syncGoogleUserRegister,
   userLogin,
@@ -33,16 +36,16 @@ auth.post("/signup", validate(registerSchema), async (c) => {
 auth.post("/login", validate(loginSchema), async (c) => {
   try {
     const body = c.req.valid("json") as LoginSchema;
-    const { accessToken, refreshToken } = await userLogin(body);
+    const result = await userLogin(body);
 
-    setCookie(c, "refreshToken", refreshToken, {
+    setCookie(c, "refreshToken", result.refreshToken, {
       httpOnly: true,
       secure: true,
       sameSite: "Lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });
-    return c.json({ success: true, accessToken }, 200);
+    return c.json({ success: true, ...result }, 200);
   } catch (error: any) {
     const status = error.status || 500;
     const message = error.message || "Internal Server Error";
@@ -50,16 +53,70 @@ auth.post("/login", validate(loginSchema), async (c) => {
   }
 });
 
-auth.post("/google-sync-login", authMiddleware, async (c) => {
-  const user = c.get("user" as any);
-  const result = await syncGoogleUserLogin(user.id);
-  return c.json({ success: true, user: result }, 200);
+auth.post("/google-sync", authMiddleware, validate(googleSyncSchema), async (c) => {
+  try {
+    const user = c.get("user" as any);
+    const body = c.req.valid("json") as GoogleSyncInput;
+    const result = await syncGoogleUser(user, body);
+
+    setCookie(c, "refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return c.json({ success: true, ...result }, 200);
+  } catch (error: any) {
+    const status = error.status || 500;
+    const message = error.message || "Internal Server Error";
+    return c.json({ success: false, message }, status);
+  }
 });
 
-auth.post("/google-sync-register", async (c) => {
-  const body = await c.req.json();
-  const result = await syncGoogleUserRegister(body);
-  return c.json({ success: true, data: result }, 201);
+auth.post("/google-sync-login", authMiddleware, validate(googleSyncSchema), async (c) => {
+  try {
+    const user = c.get("user" as any);
+    const body = c.req.valid("json") as GoogleSyncInput;
+    const result = await syncGoogleUserLogin(user, body);
+
+    setCookie(c, "refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return c.json({ success: true, ...result }, 200);
+  } catch (error: any) {
+    const status = error.status || 500;
+    const message = error.message || "Internal Server Error";
+    return c.json({ success: false, message }, status);
+  }
+});
+
+auth.post("/google-sync-register", authMiddleware, validate(googleSyncSchema), async (c) => {
+  try {
+    const user = c.get("user" as any);
+    const body = c.req.valid("json") as GoogleSyncInput;
+    const result = await syncGoogleUserRegister(user, body);
+
+    setCookie(c, "refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return c.json({ success: true, ...result }, 200);
+  } catch (error: any) {
+    const status = error.status || 500;
+    const message = error.message || "Internal Server Error";
+    return c.json({ success: false, message }, status);
+  }
 });
 
 auth.post("/logout", async (c) => {
@@ -80,10 +137,11 @@ auth.post("/refresh", async (c) => {
   const result = await refreshSession(refreshToken);
 
   if (!result) {
-    return c.json({ message: "Invalid or expired refresh token" }, 401);
+    return c.json({ success: false, message: "Invalid or expired refresh token" }, 401);
   }
 
   return c.json({
+    success: true,
     accessToken: result.accessToken,
     user: result.user,
   });

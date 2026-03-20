@@ -5,7 +5,7 @@ import { db } from "../../core/db/index.js";
 import { eq, and } from "drizzle-orm";
 import { workoutPlans } from "../../core/db/tables/workout_plans.js";
 import { createPlanSchema, CreatePlanInput } from "./schema.js";
-import { createPlan } from "./service.js";
+import { createPlan, getPlanById } from "./service.js";
 
 const plan = new Hono();
 
@@ -39,28 +39,49 @@ plan.post("/", authMiddleware, validate(createPlanSchema), async (c) => {
   }
 });
 
-plan.get("/:id", authMiddleware, async (c) => {});
+plan.get("/:id", authMiddleware, async (c) => {
+  try {
+    const user = c.get("user" as any);
+    const id = c.req.param("id");
+
+    const data = await getPlanById(user.id, id);
+
+    return c.json({
+      success: true,
+      data,
+    });
+  } catch (error: any) {
+    return c.json(
+      { success: false, message: error.message },
+      error.status || 500,
+    );
+  }
+});
+
 plan.put("/:id", authMiddleware, async (c) => {});
+
 plan.delete("/:id", authMiddleware, async (c) => {
   /*delete plan by id */
   try {
     const authUser = c.get("user" as any);
     const id = c.req.param("id");
-    
+
     const result = await db
       .delete(workoutPlans)
-      .where(and(eq(workoutPlans.user_id, authUser.id), eq(workoutPlans.id, id)))
+      .where(
+        and(eq(workoutPlans.user_id, authUser.id), eq(workoutPlans.id, id)),
+      )
       .returning();
-    
+
     if (result.length === 0) {
       return c.json({ success: false, message: "Plan not found" }, 404);
     }
-    
+
     return c.json({ success: true });
   } catch (error: any) {
     const status = error.status || 500;
     const message = error.message || "Internal Server Error";
-    
+
     return c.json({ success: false, message }, status);
   }
 });

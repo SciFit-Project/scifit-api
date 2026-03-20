@@ -3,7 +3,7 @@ import { workoutPlans } from "../../core/db/tables/workout_plans.js";
 import { workoutDays } from "../../core/db/tables/workout_days.js";
 import { workoutDayExercises } from "../../core/db/tables/workout_day_exercises.js";
 import { exercises } from "../../core/db/tables/exercises.js";
-import { inArray } from "drizzle-orm";
+import { inArray, eq, and } from "drizzle-orm";
 import { CreatePlanInput } from "./schema.js";
 
 export const createPlan = async (userId: string, input: CreatePlanInput) => {
@@ -53,4 +53,78 @@ export const createPlan = async (userId: string, input: CreatePlanInput) => {
 
     return { plan };
   });
+};
+
+export const getPlanById = async (userId: string, planId: string) => {
+  const rows = await db
+    .select({
+      plan: workoutPlans,
+      day: workoutDays,
+      wde: workoutDayExercises,
+      exercise: exercises,
+    })
+    .from(workoutPlans)
+    .leftJoin(
+      workoutDays,
+      eq(workoutDays.plan_id, workoutPlans.id)
+    )
+    .leftJoin(
+      workoutDayExercises,
+      eq(workoutDayExercises.day_id, workoutDays.id)
+    )
+    .leftJoin(
+      exercises,
+      eq(exercises.id, workoutDayExercises.exercise_id)
+    )
+    .where(
+      and(eq(workoutPlans.user_id, userId),eq(workoutPlans.id, planId))
+    )
+    .orderBy(workoutDays.order, workoutDayExercises.order);
+
+  if (rows.length === 0) {
+    throw { message: "Plan not found", status: 404 };
+  }
+
+  const plan = rows[0].plan;
+
+  const daysMap = new Map<string, any>();
+
+  for (const row of rows) {
+    const day = row.day;
+    if (!day) continue;
+
+    if (!daysMap.has(day.id)) {
+      daysMap.set(day.id, {
+        id: day.id,
+        day_of_week: day.day_of_week,
+        name: day.name,
+        order: day.order,
+        exercises: [],
+      });
+    }
+
+    const currentDay = daysMap.get(day.id);
+
+    if (row.wde && row.exercise) {
+      currentDay.exercises.push({
+        id: row.wde.id,
+        exercise: {
+          id: row.exercise.id,
+          name: row.exercise.name,
+        },
+        sets: row.wde.sets,
+        reps_min: row.wde.reps_min,
+        reps_max: row.wde.reps_max,
+        order: row.wde.order,
+      });
+    }
+  }
+
+  return {
+    id: plan.id,
+    name: plan.name,
+    frequency: plan.frequency,
+    is_active: plan.is_active,
+    days: Array.from(daysMap.values()),
+  };
 };

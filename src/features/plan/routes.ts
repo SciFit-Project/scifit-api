@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { authMiddleware } from "../../core/middleware/auth.js";
 import { validate } from "../../core/middleware/validator.js";
 import { db } from "../../core/db/index.js";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { workoutPlans } from "../../core/db/tables/workout_plans.js";
 import { createPlanSchema, CreatePlanInput } from "./schema.js";
 import { createPlan } from "./service.js";
@@ -41,7 +41,30 @@ plan.post("/", authMiddleware, validate(createPlanSchema), async (c) => {
 
 plan.get("/:id", authMiddleware, async (c) => {});
 plan.put("/:id", authMiddleware, async (c) => {});
-plan.delete("/:id", authMiddleware, async (c) => {});
+plan.delete("/:id", authMiddleware, async (c) => {
+  /*delete plan by id */
+  try {
+    const authUser = c.get("user" as any);
+    const id = c.req.param("id");
+    
+    const result = await db
+      .delete(workoutPlans)
+      .where(and(eq(workoutPlans.user_id, authUser.id), eq(workoutPlans.id, id)))
+      .returning();
+    
+    if (result.length === 0) {
+      return c.json({ success: false, message: "Plan not found" }, 404);
+    }
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    const status = error.status || 500;
+    const message = error.message || "Internal Server Error";
+    
+    return c.json({ success: false, message }, status);
+  }
+});
+
 plan.put("/:id/activate", authMiddleware, async (c) => {});
 plan.put("/:id/today", authMiddleware, async (c) => {});
 

@@ -3,7 +3,7 @@ import { workoutPlans } from "../../core/db/tables/workout_plans.js";
 import { workoutDays } from "../../core/db/tables/workout_days.js";
 import { workoutDayExercises } from "../../core/db/tables/workout_day_exercises.js";
 import { exercises } from "../../core/db/tables/exercises.js";
-import { inArray, eq, and } from "drizzle-orm";
+import { inArray, eq, and, sql } from "drizzle-orm";
 import { CreatePlanInput } from "./schema.js";
 
 export const createPlan = async (userId: string, input: CreatePlanInput) => {
@@ -171,39 +171,25 @@ export const getActiveTodaysWorkout = async (userId: string, dayOfWeek: number) 
 };
 
 export const activatePlan = async (userId: string, planId: string) => {
-  return await db.transaction(async (tx) => {
-    // Check if the plan exists and belongs to the user
-    const [planToActivate] = await tx
-      .select({ id: workoutPlans.id })
-      .from(workoutPlans)
-      .where(
-        and(
-          eq(workoutPlans.id, planId),
-          eq(workoutPlans.user_id, userId)
-        )
-      );
+  return db.transaction(async (tx) => {
+    const result = await tx
+      .update(workoutPlans)
+      .set({
+        is_active: sql<boolean>`
+          CASE 
+            WHEN ${workoutPlans.id} = ${planId} THEN true
+            ELSE false
+          END
+        `,
+      })
+      .where(eq(workoutPlans.user_id, userId))
+      .returning();
 
-    if (!planToActivate) {
+    const activatedPlan = result.find((p) => p.id === planId);
+
+    if (!activatedPlan) {
       throw { message: "Plan not found", status: 404 };
     }
-
-    // Set all user's plans to inactive
-    await tx
-      .update(workoutPlans)
-      .set({ is_active: false })
-      .where(eq(workoutPlans.user_id, userId));
-
-    // Set the specific plan to active
-    const [activatedPlan] = await tx
-      .update(workoutPlans)
-      .set({ is_active: true })
-      .where(
-        and(
-          eq(workoutPlans.id, planId),
-          eq(workoutPlans.user_id, userId)
-        )
-      )
-      .returning();
 
     return activatedPlan;
   });

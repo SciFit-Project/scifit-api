@@ -5,11 +5,26 @@ import { db } from "../../core/db/index.js";
 import { eq, and } from "drizzle-orm";
 import { workoutPlans } from "../../core/db/tables/workout_plans.js";
 import { createPlanSchema, CreatePlanInput } from "./schema.js";
-import { createPlan, getPlanById } from "./service.js";
+import { createPlan, getPlanById, getActiveTodaysWorkout } from "./service.js";
 
 const plan = new Hono();
 
-plan.get("/active/today", authMiddleware, async (c) => {});
+plan.get("/active/today", authMiddleware, async (c) => {
+  try {
+    const user = c.get("user" as any);
+    if (!user) {
+      return c.json({ success: false, message: "Unauthorized" }, 401);
+    }
+    const today = new Date().getDay();
+    const data = await getActiveTodaysWorkout(user.id, today);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json(
+      { success: false, message: error.message },
+      error.status || 500,
+    );
+  }
+});
 
 plan.get("/", authMiddleware, async (c) => {
   try {

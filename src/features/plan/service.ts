@@ -128,3 +128,90 @@ export const getPlanById = async (userId: string, planId: string) => {
     days: Array.from(daysMap.values()),
   };
 };
+
+export const getActiveTodaysWorkout = async (userId: string, dayOfWeek: number) => {
+  const activePlanRow = await db
+    .select({ id: workoutPlans.id })
+    .from(workoutPlans)
+    .where(
+      and(
+        eq(workoutPlans.user_id, userId),
+        eq(workoutPlans.is_active, true)
+      )
+    );
+
+  if (activePlanRow.length === 0) {
+    throw { message: "No workout scheduled for today", status: 404 };
+  }
+
+  const planId = activePlanRow[0].id;
+
+  const rows = await db
+    .select({
+      plan: workoutPlans,
+      day: workoutDays,
+      wde: workoutDayExercises,
+      exercise: exercises,
+    })
+    .from(workoutPlans)
+    .innerJoin(
+      workoutDays,
+      eq(workoutDays.plan_id, workoutPlans.id)
+    )
+    .leftJoin(
+      workoutDayExercises,
+      eq(workoutDayExercises.day_id, workoutDays.id)
+    )
+    .leftJoin(
+      exercises,
+      eq(exercises.id, workoutDayExercises.exercise_id)
+    )
+    .where(
+      and(
+        eq(workoutDays.plan_id, planId),
+        eq(workoutDays.day_of_week, dayOfWeek)
+      )
+    )
+    .orderBy(workoutDayExercises.order);
+
+  if (rows.length === 0) {
+    throw { message: "No workout scheduled for today", status: 404 };
+  }
+
+  const plan = rows[0].plan;
+  const day = rows[0].day;
+
+  const currentDay: any = {
+    id: day.id,
+    day_of_week: day.day_of_week,
+    name: day.name,
+    order: day.order,
+    exercises: [],
+  };
+
+  for (const row of rows) {
+    if (row.wde && row.exercise) {
+      currentDay.exercises.push({
+        id: row.wde.id,
+        exercise: {
+          id: row.exercise.id,
+          name: row.exercise.name,
+        },
+        sets: row.wde.sets,
+        reps_min: row.wde.reps_min,
+        reps_max: row.wde.reps_max,
+        order: row.wde.order,
+      });
+    }
+  }
+
+  return {
+    plan: {
+      id: plan.id,
+      name: plan.name,
+      frequency: plan.frequency,
+      is_active: plan.is_active,
+    },
+    ...currentDay,
+  };
+};

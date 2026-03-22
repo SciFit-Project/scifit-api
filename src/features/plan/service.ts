@@ -195,20 +195,13 @@ export const activatePlan = async (userId: string, planId: string) => {
   });
 };
 
-export const updatePlan = async (userId: string, planId: string, input: CreatePlanInput) => {
-  const exerciseIds = input.days.flatMap(day => day.exercises.map(ex => ex.exerciseId));
-
-  const existingExercises = await db
-    .select({ id: exercises.id })
-    .from(exercises)
-    .where(inArray(exercises.id, exerciseIds));
-
-  if (existingExercises.length !== new Set(exerciseIds).size) {
-    throw { message: "One or more exercises do not exist", status: 400 };
-  }
-  
-  return await db.transaction(async (tx) => {
-    const [existingPlan] = await tx
+export const updatePlan = async (
+  userId: string,
+  planId: string,
+  input: CreatePlanInput
+) => {
+  return db.transaction(async (tx) => {
+    const [plan] = await tx
       .select({ id: workoutPlans.id })
       .from(workoutPlans)
       .where(
@@ -218,8 +211,25 @@ export const updatePlan = async (userId: string, planId: string, input: CreatePl
         )
       );
 
-    if (!existingPlan) {
+    if (!plan) {
       throw { message: "Plan not found", status: 404 };
+    }
+
+    const exerciseIds = input.days.flatMap((d) =>
+      d.exercises.map((e) => e.exerciseId)
+    );
+
+    const uniqueIds = [...new Set(exerciseIds)];
+
+    if (uniqueIds.length) {
+      const existing = await tx
+        .select({ id: exercises.id })
+        .from(exercises)
+        .where(inArray(exercises.id, uniqueIds));
+
+      if (existing.length !== uniqueIds.length) {
+        throw { message: "One or more exercises do not exist", status: 400 };
+      }
     }
 
     const [updatedPlan] = await tx
@@ -234,25 +244,36 @@ export const updatePlan = async (userId: string, planId: string, input: CreatePl
 
     await tx.delete(workoutDays).where(eq(workoutDays.plan_id, planId));
 
-    for (let i = 0; i < input.days.length; i++) {
-      const day = input.days[i];
-      const [dayRecord] = await tx.insert(workoutDays).values({
-        plan_id: updatedPlan.id,
-        name: day.name,
-        day_of_week: day.dayOfWeek,
-        order: day.order ?? i,
-      }).returning();
+    const dayValues = input.days.map((day, i) => ({
+      plan_id: planId,
+      name: day.name,
+      day_of_week: day.dayOfWeek,
+      order: day.order ?? i,
+    }));
 
-      for (const exercise of day.exercises) {
-        await tx.insert(workoutDayExercises).values({
-          day_id: dayRecord.id,
-          exercise_id: exercise.exerciseId,
-          sets: exercise.sets,
-          reps_min: exercise.repsMin,
-          reps_max: exercise.repsMax,
-          order: exercise.order ?? 0,
-        });
-      }
+    const insertedDays = await tx
+      .insert(workoutDays)
+      .values(dayValues)
+      .returning();
+
+    const dayIdMap = new Map<number, string>();
+    insertedDays.forEach((d, i) => {
+      dayIdMap.set(i, d.id);
+    });
+
+    const exerciseValues = input.days.flatMap((day, i) =>
+      day.exercises.map((ex, j) => ({
+        day_id: dayIdMap.get(i)!,
+        exercise_id: ex.exerciseId,
+        sets: ex.sets,
+        reps_min: ex.repsMin,
+        reps_max: ex.repsMax,
+        order: ex.order ?? j,
+      }))
+    );
+
+    if (exerciseValues.length) {
+      await tx.insert(workoutDayExercises).values(exerciseValues);
     }
 
     return { plan: updatedPlan };

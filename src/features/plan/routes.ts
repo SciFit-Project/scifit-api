@@ -5,7 +5,7 @@ import { db } from "../../core/db/index.js";
 import { eq, and } from "drizzle-orm";
 import { workoutPlans } from "../../core/db/tables/workout_plans.js";
 import { createPlanSchema, CreatePlanInput } from "./schema.js";
-import { createPlan, getPlanById, getActiveTodaysWorkout, activatePlan } from "./service.js";
+import { createPlan, getPlanById, getActiveTodaysWorkout, activatePlan, updatePlan } from "./service.js";
 
 const plan = new Hono();
 
@@ -73,8 +73,23 @@ plan.get("/:id", authMiddleware, async (c) => {
   }
 });
 
-plan.put("/:id", authMiddleware, async (c) => {
-  
+plan.put("/:id", authMiddleware, validate(createPlanSchema), async (c) => {
+  try {
+    const user = c.get("user" as any);
+    if (!user) {
+      return c.json({ success: false, message: "Unauthorized" }, 401);
+    }
+    const id = c.req.param("id");
+    const body = c.req.valid("json") as CreatePlanInput;
+
+    const result = await updatePlan(user.id, id, body);
+
+    return c.json({ success: true, ...result });
+  } catch (error: any) {
+    const status = error.status || 500;
+    const message = error.message || "Internal Server Error";
+    return c.json({ success: false, message }, status);
+  }
 });
 
 plan.delete("/:id", authMiddleware, async (c) => {
@@ -121,7 +136,7 @@ plan.put("/:id/activate", authMiddleware, async (c) => {
 });
 
 plan.put("/:id/today", authMiddleware, async (c) => {
-
+  
 });
 
 plan.post("/:id/days/:dayId/exercises", authMiddleware, async (c) => {});

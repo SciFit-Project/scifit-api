@@ -254,3 +254,67 @@ export const activatePlan = async (userId: string, planId: string) => {
     return activatedPlan;
   });
 };
+
+export const updatePlan = async (userId: string, planId: string, input: CreatePlanInput) => {
+  const exerciseIds = input.days.flatMap(day => day.exercises.map(ex => ex.exerciseId));
+
+  const existingExercises = await db
+    .select({ id: exercises.id })
+    .from(exercises)
+    .where(inArray(exercises.id, exerciseIds));
+
+  if (existingExercises.length !== new Set(exerciseIds).size) {
+    throw { message: "One or more exercises do not exist", status: 400 };
+  }
+  
+  return await db.transaction(async (tx) => {
+    const [existingPlan] = await tx
+      .select({ id: workoutPlans.id })
+      .from(workoutPlans)
+      .where(
+        and(
+          eq(workoutPlans.id, planId),
+          eq(workoutPlans.user_id, userId)
+        )
+      );
+
+    if (!existingPlan) {
+      throw { message: "Plan not found", status: 404 };
+    }
+
+    const [updatedPlan] = await tx
+      .update(workoutPlans)
+      .set({
+        name: input.name,
+        frequency: input.frequency,
+        updated_at: new Date(),
+      })
+      .where(eq(workoutPlans.id, planId))
+      .returning();
+
+    await tx.delete(workoutDays).where(eq(workoutDays.plan_id, planId));
+
+    for (let i = 0; i < input.days.length; i++) {
+      const day = input.days[i];
+      const [dayRecord] = await tx.insert(workoutDays).values({
+        plan_id: updatedPlan.id,
+        name: day.name,
+        day_of_week: day.dayOfWeek,
+        order: day.order ?? i,
+      }).returning();
+
+      for (const exercise of day.exercises) {
+        await tx.insert(workoutDayExercises).values({
+          day_id: dayRecord.id,
+          exercise_id: exercise.exerciseId,
+          sets: exercise.sets,
+          reps_min: exercise.repsMin,
+          reps_max: exercise.repsMax,
+          order: exercise.order ?? 0,
+        });
+      }
+    }
+
+    return { plan: updatedPlan };
+  });
+};

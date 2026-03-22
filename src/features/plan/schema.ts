@@ -19,6 +19,9 @@ export const createPlanSchema = z.object({
   name: z.string().min(1),
   frequency: z.number().int().min(1).max(7),
   days: z.array(daySchema).min(1),
+}).refine((data) => data.days.length === data.frequency, {
+  message: "The number of days provided must strictly match the frequency.",
+  path: ["days"],
 });
 
 export type CreatePlanInput = z.infer<typeof createPlanSchema>;

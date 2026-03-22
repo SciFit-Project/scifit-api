@@ -215,3 +215,42 @@ export const getActiveTodaysWorkout = async (userId: string, dayOfWeek: number) 
     ...currentDay,
   };
 };
+
+export const activatePlan = async (userId: string, planId: string) => {
+  return await db.transaction(async (tx) => {
+    // Check if the plan exists and belongs to the user
+    const [planToActivate] = await tx
+      .select({ id: workoutPlans.id })
+      .from(workoutPlans)
+      .where(
+        and(
+          eq(workoutPlans.id, planId),
+          eq(workoutPlans.user_id, userId)
+        )
+      );
+
+    if (!planToActivate) {
+      throw { message: "Plan not found", status: 404 };
+    }
+
+    // Set all user's plans to inactive
+    await tx
+      .update(workoutPlans)
+      .set({ is_active: false })
+      .where(eq(workoutPlans.user_id, userId));
+
+    // Set the specific plan to active
+    const [activatedPlan] = await tx
+      .update(workoutPlans)
+      .set({ is_active: true })
+      .where(
+        and(
+          eq(workoutPlans.id, planId),
+          eq(workoutPlans.user_id, userId)
+        )
+      )
+      .returning();
+
+    return activatedPlan;
+  });
+};

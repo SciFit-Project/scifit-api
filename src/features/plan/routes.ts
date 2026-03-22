@@ -5,7 +5,7 @@ import { db } from "../../core/db/index.js";
 import { eq, and } from "drizzle-orm";
 import { workoutPlans } from "../../core/db/tables/workout_plans.js";
 import { createPlanSchema, CreatePlanInput } from "./schema.js";
-import { createPlan, getPlanById, getActiveTodaysWorkout } from "./service.js";
+import { createPlan, getPlanById, getActiveTodaysWorkout, activatePlan } from "./service.js";
 
 const plan = new Hono();
 
@@ -73,7 +73,9 @@ plan.get("/:id", authMiddleware, async (c) => {
   }
 });
 
-plan.put("/:id", authMiddleware, async (c) => {});
+plan.put("/:id", authMiddleware, async (c) => {
+  
+});
 
 plan.delete("/:id", authMiddleware, async (c) => {
   /*delete plan by id */
@@ -101,8 +103,26 @@ plan.delete("/:id", authMiddleware, async (c) => {
   }
 });
 
-plan.put("/:id/activate", authMiddleware, async (c) => {});
-plan.put("/:id/today", authMiddleware, async (c) => {});
+plan.put("/:id/activate", authMiddleware, async (c) => {
+  try {
+    const user = c.get("user" as any);
+    if (!user) {
+      return c.json({ success: false, message: "Unauthorized" }, 401);
+    }
+    const id = c.req.param("id");
+    const data = await activatePlan(user.id, id);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json(
+      { success: false, message: error.message },
+      error.status || 500
+    );
+  }
+});
+
+plan.put("/:id/today", authMiddleware, async (c) => {
+
+});
 
 plan.post("/:id/days/:dayId/exercises", authMiddleware, async (c) => {});
 plan.put("/:id/days/:dayId/exercises/:exId", authMiddleware, async (c) => {});

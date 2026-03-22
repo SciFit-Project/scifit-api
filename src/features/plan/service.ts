@@ -56,77 +56,31 @@ export const createPlan = async (userId: string, input: CreatePlanInput) => {
 };
 
 export const getPlanById = async (userId: string, planId: string) => {
-  const rows = await db
-    .select({
-      plan: workoutPlans,
-      day: workoutDays,
-      wde: workoutDayExercises,
-      exercise: exercises,
-    })
-    .from(workoutPlans)
-    .leftJoin(
-      workoutDays,
-      eq(workoutDays.plan_id, workoutPlans.id)
-    )
-    .leftJoin(
-      workoutDayExercises,
-      eq(workoutDayExercises.day_id, workoutDays.id)
-    )
-    .leftJoin(
-      exercises,
-      eq(exercises.id, workoutDayExercises.exercise_id)
-    )
-    .where(
-      and(eq(workoutPlans.user_id, userId),eq(workoutPlans.id, planId))
-    )
-    .orderBy(workoutDays.order, workoutDayExercises.order);
-
-  if (rows.length === 0) {
-    throw { message: "Plan not found", status: 404 };
-  }
-
-  const plan = rows[0].plan;
-
-  const daysMap = new Map<string, any>();
-
-  for (const row of rows) {
-    const day = row.day;
-    if (!day) continue;
-
-    if (!daysMap.has(day.id)) {
-      daysMap.set(day.id, {
-        id: day.id,
-        day_of_week: day.day_of_week,
-        name: day.name,
-        order: day.order,
-        exercises: [],
-      });
-    }
-
-    const currentDay = daysMap.get(day.id);
-
-    if (row.wde && row.exercise) {
-      currentDay.exercises.push({
-        id: row.wde.id,
-        exercise: {
-          id: row.exercise.id,
-          name: row.exercise.name,
+ const plan = await db.query.workoutPlans.findFirst({
+  where : and(
+    eq(workoutPlans.id, planId),
+    eq(workoutPlans.user_id, userId)
+  ),
+  with : {
+    days : {
+      orderBy : workoutDays.order,
+      with : {
+        exercises : {
+          orderBy : workoutDayExercises.order,
+          with : {
+            exercise : true,
+          },
         },
-        sets: row.wde.sets,
-        reps_min: row.wde.reps_min,
-        reps_max: row.wde.reps_max,
-        order: row.wde.order,
-      });
-    }
-  }
+      },
+    },
+  },
+ });
 
-  return {
-    id: plan.id,
-    name: plan.name,
-    frequency: plan.frequency,
-    is_active: plan.is_active,
-    days: Array.from(daysMap.values()),
-  };
+ if (!plan) {
+  throw { message: "Plan not found", status: 404 };
+ }
+
+ return plan;
 };
 
 export const getActiveTodaysWorkout = async (userId: string, dayOfWeek: number) => {

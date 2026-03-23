@@ -4,7 +4,11 @@ import { workoutDays } from "../../core/db/tables/workout_days.js";
 import { workoutDayExercises } from "../../core/db/tables/workout_day_exercises.js";
 import { exercises } from "../../core/db/tables/exercises.js";
 import { inArray, eq, and, sql } from "drizzle-orm";
-import { CreatePlanInput } from "./schema.js";
+import {
+  AddPlanExerciseInput,
+  CreatePlanInput,
+  UpdatePlanExerciseInput,
+} from "./schema.js";
 
 export const createPlan = async (userId: string, input: CreatePlanInput) => {
   // Collect all exercise IDs
@@ -25,6 +29,7 @@ export const createPlan = async (userId: string, input: CreatePlanInput) => {
     const [plan] = await tx.insert(workoutPlans).values({
       user_id: userId,
       name: input.name,
+      description: input.description,
       frequency: input.frequency,
     }).returning();
 
@@ -175,6 +180,23 @@ export const activatePlan = async (userId: string, planId: string) => {
   });
 };
 
+export const deactivatePlan = async (userId: string, planId: string) => {
+  const [updatedPlan] = await db
+    .update(workoutPlans)
+    .set({
+      is_active: false,
+      updated_at: new Date(),
+    })
+    .where(and(eq(workoutPlans.user_id, userId), eq(workoutPlans.id, planId)))
+    .returning();
+
+  if (!updatedPlan) {
+    throw { message: "Plan not found", status: 404 };
+  }
+
+  return updatedPlan;
+};
+
 export const updatePlan = async (
   userId: string,
   planId: string,
@@ -216,6 +238,7 @@ export const updatePlan = async (
       .update(workoutPlans)
       .set({
         name: input.name,
+        description: input.description,
         frequency: input.frequency,
         updated_at: new Date(),
       })
@@ -258,4 +281,121 @@ export const updatePlan = async (
 
     return { plan: updatedPlan };
   });
+};
+
+const assertDayOwnership = async (userId: string, planId: string, dayId: string) => {
+  const day = await db.query.workoutDays.findFirst({
+    where: and(eq(workoutDays.id, dayId), eq(workoutDays.plan_id, planId)),
+    with: {
+      plan: true,
+    },
+  });
+
+  if (!day || day.plan.user_id !== userId) {
+    throw { message: "Plan day not found", status: 404 };
+  }
+
+  return day;
+};
+
+const assertExerciseExists = async (exerciseId: string) => {
+  const [exercise] = await db
+    .select({ id: exercises.id })
+    .from(exercises)
+    .where(eq(exercises.id, exerciseId));
+
+  if (!exercise) {
+    throw { message: "Exercise not found", status: 404 };
+  }
+};
+
+export const addExerciseToPlanDay = async (
+  userId: string,
+  planId: string,
+  dayId: string,
+  input: AddPlanExerciseInput,
+) => {
+  await assertDayOwnership(userId, planId, dayId);
+  await assertExerciseExists(input.exerciseId);
+
+  const [created] = await db
+    .insert(workoutDayExercises)
+    .values({
+      day_id: dayId,
+      exercise_id: input.exerciseId,
+      sets: input.sets,
+      reps_min: input.repsMin,
+      reps_max: input.repsMax,
+      order: input.order ?? 0,
+    })
+    .returning();
+
+  return created;
+};
+
+export const updateExerciseInPlanDay = async (
+  userId: string,
+  planId: string,
+  dayId: string,
+  exerciseRowId: string,
+  input: UpdatePlanExerciseInput,
+) => {
+  await assertDayOwnership(userId, planId, dayId);
+
+  if (input.exerciseId) {
+    await assertExerciseExists(input.exerciseId);
+  }
+
+  const [existing] = await db
+    .select()
+    .from(workoutDayExercises)
+    .where(
+      and(
+        eq(workoutDayExercises.id, exerciseRowId),
+        eq(workoutDayExercises.day_id, dayId),
+      ),
+    );
+
+  if (!existing) {
+    throw { message: "Day exercise not found", status: 404 };
+  }
+
+  const [updated] = await db
+    .update(workoutDayExercises)
+    .set({
+      exercise_id: input.exerciseId ?? existing.exercise_id,
+      sets: input.sets ?? existing.sets,
+      reps_min: input.repsMin ?? existing.reps_min,
+      reps_max: input.repsMax ?? existing.reps_max,
+      order: input.order ?? existing.order,
+    })
+    .where(eq(workoutDayExercises.id, exerciseRowId))
+    .returning();
+
+  return updated;
+};
+
+export const removeExerciseFromPlanDay = async (
+  userId: string,
+  planId: string,
+  dayId: string,
+  exerciseRowId: string,
+) => {
+  await assertDayOwnership(userId, planId, dayId);
+
+  const [deleted] = await db
+    .delete(workoutDayExercises)
+    .where(
+      and(
+        eq(workoutDayExercises.id, exerciseRowId),
+        eq(workoutDayExercises.day_id, dayId),
+      ),
+    )
+    .returning();
+
+  if (!deleted) {
+    throw { message: "Day exercise not found", status: 404 };
+  }
+
+  return deleted;
 };

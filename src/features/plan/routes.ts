@@ -4,8 +4,25 @@ import { validate } from "../../core/middleware/validator.js";
 import { db } from "../../core/db/index.js";
 import { eq, and } from "drizzle-orm";
 import { workoutPlans } from "../../core/db/tables/workout_plans.js";
-import { createPlanSchema, CreatePlanInput } from "./schema.js";
-import { createPlan, getPlanById, getActiveTodaysWorkout, activatePlan, updatePlan } from "./service.js";
+import {
+  createPlanSchema,
+  CreatePlanInput,
+  addPlanExerciseSchema,
+  updatePlanExerciseSchema,
+  AddPlanExerciseInput,
+  UpdatePlanExerciseInput,
+} from "./schema.js";
+import {
+  createPlan,
+  getPlanById,
+  getActiveTodaysWorkout,
+  activatePlan,
+  deactivatePlan,
+  updatePlan,
+  addExerciseToPlanDay,
+  updateExerciseInPlanDay,
+  removeExerciseFromPlanDay,
+} from "./service.js";
 
 const plan = new Hono();
 
@@ -135,16 +152,89 @@ plan.put("/:id/activate", authMiddleware, async (c) => {
   }
 });
 
-plan.put("/:id/today", authMiddleware, async (c) => {
-  
+plan.put("/:id/deactivate", authMiddleware, async (c) => {
+  try {
+    const user = c.get("user" as any);
+    if (!user) {
+      return c.json({ success: false, message: "Unauthorized" }, 401);
+    }
+    const id = c.req.param("id");
+    const data = await deactivatePlan(user.id, id);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json(
+      { success: false, message: error.message },
+      error.status || 500,
+    );
+  }
 });
 
-plan.post("/:id/days/:dayId/exercises", authMiddleware, async (c) => {});
-plan.put("/:id/days/:dayId/exercises/:exId", authMiddleware, async (c) => {});
+plan.put("/:id/today", authMiddleware, async (c) => {
+  return c.json({ success: false, message: "Not implemented" }, 501);
+});
+
+plan.post(
+  "/:id/days/:dayId/exercises",
+  authMiddleware,
+  validate(addPlanExerciseSchema),
+  async (c) => {
+    try {
+      const user = c.get("user" as any);
+      const id = c.req.param("id");
+      const dayId = c.req.param("dayId");
+      const body = c.req.valid("json") as AddPlanExerciseInput;
+
+      const data = await addExerciseToPlanDay(user.id, id, dayId, body);
+      return c.json({ success: true, data }, 201);
+    } catch (error: any) {
+      return c.json(
+        { success: false, message: error.message },
+        error.status || 500,
+      );
+    }
+  },
+);
+plan.put(
+  "/:id/days/:dayId/exercises/:exId",
+  authMiddleware,
+  validate(updatePlanExerciseSchema),
+  async (c) => {
+    try {
+      const user = c.get("user" as any);
+      const id = c.req.param("id");
+      const dayId = c.req.param("dayId");
+      const exId = c.req.param("exId");
+      const body = c.req.valid("json") as UpdatePlanExerciseInput;
+
+      const data = await updateExerciseInPlanDay(user.id, id, dayId, exId, body);
+      return c.json({ success: true, data });
+    } catch (error: any) {
+      return c.json(
+        { success: false, message: error.message },
+        error.status || 500,
+      );
+    }
+  },
+);
 plan.delete(
   "/:id/days/:dayId/exercises/:exId",
   authMiddleware,
-  async (c) => {},
+  async (c) => {
+    try {
+      const user = c.get("user" as any);
+      const id = c.req.param("id");
+      const dayId = c.req.param("dayId");
+      const exId = c.req.param("exId");
+
+      const data = await removeExerciseFromPlanDay(user.id, id, dayId, exId);
+      return c.json({ success: true, data });
+    } catch (error: any) {
+      return c.json(
+        { success: false, message: error.message },
+        error.status || 500,
+      );
+    }
+  },
 );
 
 export default plan;

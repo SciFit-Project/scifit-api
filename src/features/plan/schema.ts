@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const exerciseSchema = z.object({
+export const exerciseSchema = z.object({
   exerciseId: z.string().uuid(),
   sets: z.number().int().positive(),
   repsMin: z.number().int().positive().optional(),
@@ -17,6 +17,7 @@ const daySchema = z.object({
 
 export const createPlanSchema = z.object({
   name: z.string().min(1),
+  description: z.string().optional().default(""),
   frequency: z.number().int().min(1).max(7),
   days: z.array(daySchema).min(1),
 }).superRefine((data, ctx) => {
@@ -43,3 +44,18 @@ export const createPlanSchema = z.object({
 });
 
 export type CreatePlanInput = z.infer<typeof createPlanSchema>;
+
+export const addPlanExerciseSchema = exerciseSchema;
+
+export const updatePlanExerciseSchema = z.object({
+  exerciseId: z.string().uuid().optional(),
+  sets: z.number().int().positive().optional(),
+  repsMin: z.number().int().positive().optional(),
+  repsMax: z.number().int().positive().optional(),
+  order: z.number().int().min(0).optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: "At least one field must be provided.",
+});
+
+export type AddPlanExerciseInput = z.infer<typeof addPlanExerciseSchema>;
+export type UpdatePlanExerciseInput = z.infer<typeof updatePlanExerciseSchema>;

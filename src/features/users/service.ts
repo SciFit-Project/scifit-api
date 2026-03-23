@@ -3,10 +3,10 @@ import { db } from "../../core/db/index.js";
 import { users } from "../../core/db/tables/users.js";
 import { UpdateProfileInput } from "./schema.js";
 
-const mapGender = (gender: UpdateProfileInput["gender"]) =>
+const mapGender = (gender: NonNullable<UpdateProfileInput["gender"]>) =>
   gender.toUpperCase() as "MALE" | "FEMALE";
 
-const mapGoal = (plan: UpdateProfileInput["plan"]) => {
+const mapGoal = (plan: NonNullable<UpdateProfileInput["plan"]>) => {
   switch (plan) {
     case "cutting":
       return "CUTTING" as const;
@@ -18,7 +18,7 @@ const mapGoal = (plan: UpdateProfileInput["plan"]) => {
 };
 
 const mapExperienceLevel = (
-  activityLevel: UpdateProfileInput["activity_level"],
+  activityLevel: NonNullable<UpdateProfileInput["activity_level"]>,
 ) => {
   switch (activityLevel) {
     case "sedentary":
@@ -64,16 +64,27 @@ export const updateProfile = async (
   userId: string,
   body: UpdateProfileInput,
 ) => {
+  const isOnboardingPayload =
+    body.age != null &&
+    body.height != null &&
+    body.weight != null &&
+    body.gender != null &&
+    body.plan != null &&
+    body.activity_level != null;
+
   const [updatedUser] = await db
     .update(users)
     .set({
+      fullName: body.fullname?.trim(),
       age: body.age,
       heightCm: body.height,
       weightKg: body.weight,
-      gender: mapGender(body.gender),
-      goal: mapGoal(body.plan),
-      experienceLevel: mapExperienceLevel(body.activity_level),
-      onboardingCompleted: true,
+      gender: body.gender ? mapGender(body.gender) : undefined,
+      goal: body.plan ? mapGoal(body.plan) : undefined,
+      experienceLevel: body.activity_level
+          ? mapExperienceLevel(body.activity_level)
+          : undefined,
+      onboardingCompleted: isOnboardingPayload ? true : undefined,
     })
     .where(eq(users.id, userId))
     .returning({

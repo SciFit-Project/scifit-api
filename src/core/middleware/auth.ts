@@ -65,7 +65,7 @@ export const generateTokens = async (user: {
     id: user.id,
     email: user.email,
     role: user.role,
-    exp: Math.floor(Date.now() / 1000) + 15 * 60,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
   };
 
   const refreshPayload = {
@@ -103,7 +103,7 @@ export const refreshSession = async (refreshToken: string) => {
       id: user.id,
       email: user.email,
       role: user.role || "user",
-      exp: Math.floor(Date.now() / 1000) + 15 * 60,
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
     };
 
     const accessToken = await sign(accessPayload, JWT_SECRET, "HS256");

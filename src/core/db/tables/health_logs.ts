@@ -1,5 +1,5 @@
 import { pgEnum, pgTable, timestamp, uuid, integer, real, date, unique } from "drizzle-orm/pg-core";
-import { users } from "./users";
+import { users } from "./users.js";
 
 export const healthSourceEnum = pgEnum("health_source", ["HEALTH_APP", "MANUAL"]);
 
@@ -21,4 +21,3 @@ export const healthLogs = pgTable("health_logs", {
 }, (table) => ({
   userDateUnique: unique().on(table.user_id, table.date),
 }));
-

@@ -1,6 +1,6 @@
 import { pgTable, timestamp, uuid, integer, real } from "drizzle-orm/pg-core";
-import { workoutSessions } from "./workout_sessions";
-import { exercises } from "./exercises";
+import { workoutSessions } from "./workout_sessions.js";
+import { exercises } from "./exercises.js";
 
 export const sessionSets = pgTable("session_sets", {
   id:          uuid("id").primaryKey().defaultRandom(),

@@ -1,6 +1,6 @@
 import { pgTable, uuid, integer } from "drizzle-orm/pg-core";
-import { workoutDays } from "./workout_days";
-import { exercises } from "./exercises";
+import { workoutDays } from "./workout_days.js";
+import { exercises } from "./exercises.js";
 
 export const workoutDayExercises = pgTable("workout_day_exercises", {
   id:          uuid("id").primaryKey().defaultRandom(),
@@ -11,4 +11,3 @@ export const workoutDayExercises = pgTable("workout_day_exercises", {
   reps_max:    integer("reps_max"),
   order:       integer("order").notNull(),
 });
-

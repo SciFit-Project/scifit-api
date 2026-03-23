@@ -1,5 +1,5 @@
 import { pgTable, text, uuid, integer } from "drizzle-orm/pg-core";
-import { workoutPlans } from "./workout_plans";
+import { workoutPlans } from "./workout_plans.js";
 
 export const workoutDays = pgTable("workout_days", {
   id:          uuid("id").primaryKey().defaultRandom(),

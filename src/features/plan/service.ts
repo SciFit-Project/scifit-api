@@ -39,14 +39,15 @@ export const createPlan = async (userId: string, input: CreatePlanInput) => {
       }).returning();
 
       // For each exercise
-      for (const exercise of day.exercises) {
+      for (let j = 0; j < day.exercises.length; j++) {
+        const exercise = day.exercises[j];
         await tx.insert(workoutDayExercises).values({
           day_id: dayRecord.id,
           exercise_id: exercise.exerciseId,
           sets: exercise.sets,
           reps_min: exercise.repsMin,
           reps_max: exercise.repsMax,
-          order: exercise.order ?? 0,
+          order: exercise.order ?? j,
         });
       }
     }
@@ -140,6 +141,17 @@ export const getActiveTodaysWorkout = async (
 
 export const activatePlan = async (userId: string, planId: string) => {
   return db.transaction(async (tx) => {
+    const [targetPlan] = await tx
+      .select({ id: workoutPlans.id })
+      .from(workoutPlans)
+      .where(
+        and(eq(workoutPlans.user_id, userId), eq(workoutPlans.id, planId)),
+      );
+
+    if (!targetPlan) {
+      throw { message: "Plan not found", status: 404 };
+    }
+
     const result = await tx
       .update(workoutPlans)
       .set({

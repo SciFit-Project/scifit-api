@@ -19,9 +19,27 @@ export const createPlanSchema = z.object({
   name: z.string().min(1),
   frequency: z.number().int().min(1).max(7),
   days: z.array(daySchema).min(1),
-}).refine((data) => data.days.length === data.frequency, {
-  message: "The number of days provided must strictly match the frequency.",
-  path: ["days"],
+}).superRefine((data, ctx) => {
+  if (data.days.length !== data.frequency) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "The number of days provided must strictly match the frequency.",
+      path: ["days"],
+    });
+  }
+
+  const seenDays = new Set<number>();
+  data.days.forEach((day, index) => {
+    if (seenDays.has(day.dayOfWeek)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Each dayOfWeek must be unique within a plan.",
+        path: ["days", index, "dayOfWeek"],
+      });
+      return;
+    }
+    seenDays.add(day.dayOfWeek);
+  });
 });
 
 export type CreatePlanInput = z.infer<typeof createPlanSchema>;

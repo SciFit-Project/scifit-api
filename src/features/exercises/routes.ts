@@ -1,19 +1,21 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../core/middleware/auth.js";
+import { db } from "../../core/db/index.js";
+import { exercises } from "../../core/db/tables/exercises.js";
 
-const exercises = new Hono();
+const exerciseRouter = new Hono();
 
-exercises.get("/", authMiddleware, async (c) => {
-  const {
-    muscle_group,
-    equiment,
-    search,
-    page = 1,
-    limit = 20,
-  } = c.req.query();
-  return c.json({ message: "hello" });
+exerciseRouter.get("/", authMiddleware, async (c) => {
+  try {
+    const allExercises = await db.select().from(exercises);
+    return c.json({ success: true, data: allExercises });
+  } catch (error: any) {
+    const status = error.status || 500;
+    const message = error.message || "Internal Server Error";
+    return c.json({ success: false, message }, status);
+  } 
 });
 
-exercises.get("/:id", authMiddleware, async (c) => {});
+exerciseRouter.get("/:id", authMiddleware, async (c) => {});
 
-export default exercises;
+export default exerciseRouter;

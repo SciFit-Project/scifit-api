@@ -2,8 +2,7 @@ import { db } from "../../core/db/index.js";
 import { workoutSessions } from "../../core/db/tables/workout_sessions.js";
 import { sessionSets } from "../../core/db/tables/workout_sets.js";
 import { workoutDays } from "../../core/db/tables/workout_days.js";
-import { workoutPlans } from "../../core/db/tables/workout_plans.js";
-import { eq, and, desc, sql, lt } from "drizzle-orm";
+import { eq, and, desc, lt } from "drizzle-orm";
 import { StartSessionInput, LogSetInput, FinishSessionInput } from "./schema.js";
 
 const assertSessionOwnership = async (userId: string, sessionId: string) => {
@@ -20,7 +19,6 @@ const assertSessionOwnership = async (userId: string, sessionId: string) => {
 
   return session;
 };
-
 export const startSession = async (userId: string, input: StartSessionInput) => {
   if (input.workoutDayId) {
     const day = await db.query.workoutDays.findFirst({
@@ -161,16 +159,23 @@ export const getPreviousSession = async (userId: string, sessionId: string) => {
     ),
     orderBy: [desc(workoutSessions.started_at)],
     with: {
+      workoutDay: {
+        with: {
+          plan: true,
+        }
+      },
       sets: {
         with: {
           exercise: true,
         }
+        ,
+        orderBy: (sessionSets, { asc }) => [asc(sessionSets.created_at)],
       }
     }
   });
 
   if (!previousSession) {
-    throw { message: "No previous session found", status: 404 };
+    return null;
   }
 
   return previousSession;

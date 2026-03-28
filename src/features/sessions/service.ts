@@ -20,22 +20,6 @@ const assertSessionOwnership = async (userId: string, sessionId: string) => {
   return session;
 };
 export const startSession = async (userId: string, input: StartSessionInput) => {
-  if (input.workoutDayId) {
-    const day = await db.query.workoutDays.findFirst({
-      where: eq(workoutDays.id, input.workoutDayId),
-      with: { plan: true }
-    });
-    if (!day) {
-      throw { message: `Workout day not found for ID: ${input.workoutDayId}`, status: 404 };
-    }
-    if (!day.plan) {
-      throw { message: `Workout day found, but it has no associated plan (plan_id is null or invalid).`, status: 404 };
-    }
-    if (day.plan.user_id !== userId) {
-      throw { message: `Unauthorized: This workout day belongs to user ${day.plan.user_id}, but you are logged in as ${userId}`, status: 403 };
-    }
-  }
-
   const [session] = await db.insert(workoutSessions).values({
     user_id: userId,
     workout_day_id: input.workoutDayId,

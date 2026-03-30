@@ -44,3 +44,12 @@ export const redisDel = async (key: string) => {
   const redis = await connectRedis();
   return redis.del(key);
 };
+
+export const redisDelMany = async (keys: string[]) => {
+  if (keys.length === 0) {
+    return 0;
+  }
+
+  const redis = await connectRedis();
+  return redis.del(keys);
+};

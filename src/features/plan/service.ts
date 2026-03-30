@@ -4,11 +4,65 @@ import { workoutDays } from "../../core/db/tables/workout_days.js";
 import { workoutDayExercises } from "../../core/db/tables/workout_day_exercises.js";
 import { exercises } from "../../core/db/tables/exercises.js";
 import { inArray, eq, and, sql } from "drizzle-orm";
+import { redisDelMany, redisGet, redisSet } from "../../utils/redis.js";
 import {
   AddPlanExerciseInput,
   CreatePlanInput,
   UpdatePlanExerciseInput,
 } from "./schema.js";
+
+const PLAN_LIST_CACHE_TTL_SECONDS = 60 * 5;
+const PLAN_DETAIL_CACHE_TTL_SECONDS = 60 * 5;
+const ACTIVE_TODAY_CACHE_TTL_SECONDS = 60 * 5;
+
+const getPlanListCacheKey = (userId: string) => `plans:list:${userId}`;
+const getPlanDetailCacheKey = (userId: string, planId: string) =>
+  `plans:detail:${userId}:${planId}`;
+const getActiveTodayCacheKey = (userId: string, dayOfWeek: number) =>
+  `plans:active-today:${userId}:${dayOfWeek}`;
+
+const getAllPlanDetailCacheKeys = async (userId: string) => {
+  const plans = await db
+    .select({ id: workoutPlans.id })
+    .from(workoutPlans)
+    .where(eq(workoutPlans.user_id, userId));
+
+  return plans.map((plan) => getPlanDetailCacheKey(userId, plan.id));
+};
+
+const invalidatePlanCaches = async (userId: string, planId?: string) => {
+  const keys = [
+    getPlanListCacheKey(userId),
+    ...Array.from({ length: 7 }, (_, dayOfWeek) =>
+      getActiveTodayCacheKey(userId, dayOfWeek),
+    ),
+  ];
+
+  if (planId) {
+    keys.push(getPlanDetailCacheKey(userId, planId));
+  }
+
+  const detailKeys = await getAllPlanDetailCacheKeys(userId);
+  await redisDelMany([...new Set([...keys, ...detailKeys])]);
+};
+
+export const getPlans = async (userId: string) => {
+  const cacheKey = getPlanListCacheKey(userId);
+  const cachedPlans = await redisGet<typeof workoutPlans.$inferSelect[]>(cacheKey);
+
+  if (cachedPlans) {
+    return cachedPlans;
+  }
+
+  const plans = await db
+    .select()
+    .from(workoutPlans)
+    .where(eq(workoutPlans.user_id, userId));
+
+  await redisSet(cacheKey, plans, PLAN_LIST_CACHE_TTL_SECONDS);
+
+  return plans;
+};
 
 export const createPlan = async (userId: string, input: CreatePlanInput) => {
   // Collect all exercise IDs
@@ -24,7 +78,7 @@ export const createPlan = async (userId: string, input: CreatePlanInput) => {
     throw { message: "One or more exercises do not exist", status: 400 };
   }
   
-  return await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     // Insert plan
     const [plan] = await tx.insert(workoutPlans).values({
       user_id: userId,
@@ -59,9 +113,22 @@ export const createPlan = async (userId: string, input: CreatePlanInput) => {
 
     return { plan };
   });
+
+  await invalidatePlanCaches(userId, result.plan.id);
+
+  return result;
 };
 
 export const getPlanById = async (userId: string, planId: string) => {
+ const cacheKey = getPlanDetailCacheKey(userId, planId);
+ const cachedPlan = await redisGet<Awaited<ReturnType<typeof db.query.workoutPlans.findFirst>>>(
+  cacheKey,
+ );
+
+ if (cachedPlan) {
+  return cachedPlan;
+ }
+
  const plan = await db.query.workoutPlans.findFirst({
   where : and(
     eq(workoutPlans.id, planId),
@@ -86,6 +153,8 @@ export const getPlanById = async (userId: string, planId: string) => {
   throw { message: "Plan not found", status: 404 };
  }
 
+ await redisSet(cacheKey, plan, PLAN_DETAIL_CACHE_TTL_SECONDS);
+
  return plan;
 };
 
@@ -93,6 +162,13 @@ export const getActiveTodaysWorkout = async (
   userId: string,
   dayOfWeek: number
 ) => {
+  const cacheKey = getActiveTodayCacheKey(userId, dayOfWeek);
+  const cachedWorkout = await redisGet<object>(cacheKey);
+
+  if (cachedWorkout) {
+    return cachedWorkout;
+  }
+
   const plan = await db.query.workoutPlans.findFirst({
     where: and(
       eq(workoutPlans.user_id, userId),
@@ -119,7 +195,7 @@ export const getActiveTodaysWorkout = async (
 
   const day = plan.days[0];
 
-  return {
+  const workout = {
     plan: {
       id: plan.id,
       name: plan.name,
@@ -142,10 +218,14 @@ export const getActiveTodaysWorkout = async (
       order: e.order,
     })),
   };
+
+  await redisSet(cacheKey, workout, ACTIVE_TODAY_CACHE_TTL_SECONDS);
+
+  return workout;
 };
 
 export const activatePlan = async (userId: string, planId: string) => {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [targetPlan] = await tx
       .select({ id: workoutPlans.id })
       .from(workoutPlans)
@@ -178,6 +258,10 @@ export const activatePlan = async (userId: string, planId: string) => {
 
     return activatedPlan;
   });
+
+  await invalidatePlanCaches(userId, planId);
+
+  return result;
 };
 
 export const deactivatePlan = async (userId: string, planId: string) => {
@@ -194,6 +278,8 @@ export const deactivatePlan = async (userId: string, planId: string) => {
     throw { message: "Plan not found", status: 404 };
   }
 
+  await invalidatePlanCaches(userId, planId);
+
   return updatedPlan;
 };
 
@@ -202,7 +288,7 @@ export const updatePlan = async (
   planId: string,
   input: CreatePlanInput
 ) => {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [plan] = await tx
       .select({ id: workoutPlans.id })
       .from(workoutPlans)
@@ -281,6 +367,10 @@ export const updatePlan = async (
 
     return { plan: updatedPlan };
   });
+
+  await invalidatePlanCaches(userId, planId);
+
+  return result;
 };
 
 const assertDayOwnership = async (userId: string, planId: string, dayId: string) => {
@@ -330,6 +420,8 @@ export const addExerciseToPlanDay = async (
     })
     .returning();
 
+  await invalidatePlanCaches(userId, planId);
+
   return created;
 };
 
@@ -372,6 +464,8 @@ export const updateExerciseInPlanDay = async (
     .where(eq(workoutDayExercises.id, exerciseRowId))
     .returning();
 
+  await invalidatePlanCaches(userId, planId);
+
   return updated;
 };
 
@@ -397,5 +491,22 @@ export const removeExerciseFromPlanDay = async (
     throw { message: "Day exercise not found", status: 404 };
   }
 
+  await invalidatePlanCaches(userId, planId);
+
   return deleted;
+};
+
+export const deletePlan = async (userId: string, planId: string) => {
+  const [deletedPlan] = await db
+    .delete(workoutPlans)
+    .where(and(eq(workoutPlans.user_id, userId), eq(workoutPlans.id, planId)))
+    .returning();
+
+  if (!deletedPlan) {
+    throw { message: "Plan not found", status: 404 };
+  }
+
+  await invalidatePlanCaches(userId, planId);
+
+  return deletedPlan;
 };

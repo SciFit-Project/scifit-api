@@ -1,13 +1,9 @@
-import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
-
-export const users = pgTable("users", {
-    id: uuid("id").primaryKey(),
-    email: text("email").notNull().unique(),
-    fullName: text("full_name"),
-    avatarUrl: text("avatar_url"),
-    role: text("role").default("user"),
-    password: text("password"),
-
-    provider: text("provider").default("email"), // "email", "google", "apple"
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export * from "../tables/users.js";
+export * from "../tables/exercises.js";
+export * from "../tables/workout_plans.js";
+export * from "../tables/workout_days.js";
+export * from "../tables/workout_day_exercises.js";
+export * from "../tables/workout_sessions.js";
+export * from "../tables/workout_sets.js";
+export * from "../tables/health_logs.js";
+export * from "./relations.js";

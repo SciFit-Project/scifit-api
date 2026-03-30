@@ -1,9 +1,21 @@
 import { Context, Next } from "hono";
 import { sign, verify } from "hono/jwt";
-import { supabase } from "../db/index.js";
+import { db, supabase } from "../db/index.js";
+import { users } from "../db/tables/users.js";
+import { eq } from "drizzle-orm";
 
-const JWT_SECRET = process.env.JWT_SECRET || "secret";
-const JWT_SECRET_REFRESH = process.env.JWT_SECRET_REFRESH || "refresh_secret";
+const getRequiredEnv = (key: string) => {
+  const value = process.env[key];
+
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+
+  return value;
+};
+
+const JWT_SECRET = getRequiredEnv("JWT_SECRET");
+const JWT_SECRET_REFRESH = getRequiredEnv("JWT_SECRET_REFRESH");
 
 export const authMiddleware = async (c: Context, next: Next) => {
   const authHeader = c.req.header("Authorization");
@@ -34,10 +46,17 @@ export const authMiddleware = async (c: Context, next: Next) => {
     } = await supabase.auth.getUser(token);
 
     if (user && !error) {
+      const metadata = user.user_metadata || {};
       c.set("user", {
         id: user.id,
         email: user.email,
         role: user.app_metadata?.role || "user",
+        fullName:
+          metadata.full_name ||
+          metadata.name ||
+          metadata.user_name ||
+          null,
+        avatarUrl: metadata.avatar_url || metadata.picture || null,
         type: "supabase_auth",
       });
       return await next();
@@ -56,7 +75,7 @@ export const generateTokens = async (user: {
     id: user.id,
     email: user.email,
     role: user.role,
-    exp: Math.floor(Date.now() / 1000) + 15 * 60,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
   };
 
   const refreshPayload = {
@@ -73,19 +92,43 @@ export const generateTokens = async (user: {
 export const refreshSession = async (refreshToken: string) => {
   try {
     const payload = await verify(refreshToken, JWT_SECRET_REFRESH, "HS256");
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        fullName: users.fullName,
+        avatarUrl: users.avatarUrl,
+        provider: users.provider,
+      })
+      .from(users)
+      .where(eq(users.id, String(payload.id)))
+      .limit(1);
 
-    const accessToken = await sign(
-      {
-        id: payload.id,
-        email: payload.email,
-        role: payload.role,
-        exp: Math.floor(Date.now() / 1000) + 15 * 60,
+    if (!user) {
+      return null;
+    }
+
+    const accessPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role || "user",
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+    };
+
+    const accessToken = await sign(accessPayload, JWT_SECRET, "HS256");
+
+    return {
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        avatarUrl: user.avatarUrl,
+        role: user.role,
+        provider: user.provider,
       },
-      JWT_SECRET,
-      "HS256",
-    );
-
-    return { accessToken, user: payload };
+    };
   } catch (e) {
     return null;
   }

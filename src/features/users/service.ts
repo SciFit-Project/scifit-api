@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../core/db/index.js";
 import { users } from "../../core/db/tables/users.js";
 import { UpdateProfileInput } from "./schema.js";
+import { invalidateProfileCache } from "../auth/service.js";
 
 const mapGender = (gender: NonNullable<UpdateProfileInput["gender"]>) =>
   gender.toUpperCase() as "MALE" | "FEMALE";
@@ -106,6 +107,8 @@ export const updateProfile = async (
   if (!updatedUser) {
     throw { message: "User not found", status: 404 };
   }
+
+  await invalidateProfileCache(userId);
 
   return { user: serializeUserProfile(updatedUser) };
 };

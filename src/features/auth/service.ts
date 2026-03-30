@@ -5,8 +5,12 @@ import { db } from "../../core/db/index.js";
 import { comparePassword, hashPassword } from "./helper/hash.js";
 import { generateTokens } from "../../core/middleware/auth.js";
 import { users } from "../../core/db/tables/users.js";
+import { redisDel, redisGet, redisSet } from "../../utils/redis.js";
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim();
+
+const PROFILE_CACHE_TTL_SECONDS = 60 * 5;
+const getProfileCacheKey = (userId: string) => `user:profile:${userId}`;
 
 const serializeUser = (user: {
   id: string;
@@ -229,6 +233,15 @@ export const userLogin = async (body: LoginSchema) => {
 };
 
 export const getProfile = async (id: string) => {
+  const cacheKey = getProfileCacheKey(id);
+  const cachedProfile = await redisGet<{ user: ReturnType<typeof serializeUser> }>(
+    cacheKey,
+  );
+
+  if (cachedProfile) {
+    return cachedProfile;
+  }
+
   const [user] = await db
     .select({
       id: users.id,
@@ -252,5 +265,13 @@ export const getProfile = async (id: string) => {
     throw { message: "User not found", status: 404 };
   }
 
-  return { user: serializeUser(user) };
+  const profile = { user: serializeUser(user) };
+
+  await redisSet(cacheKey, profile, PROFILE_CACHE_TTL_SECONDS);
+
+  return profile;
+};
+
+export const invalidateProfileCache = async (userId: string) => {
+  await redisDel(getProfileCacheKey(userId));
 };

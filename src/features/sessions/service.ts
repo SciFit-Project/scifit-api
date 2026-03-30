@@ -4,6 +4,43 @@ import { sessionSets } from "../../core/db/tables/workout_sets.js";
 import { workoutDays } from "../../core/db/tables/workout_days.js";
 import { eq, and, desc, lt } from "drizzle-orm";
 import { StartSessionInput, LogSetInput, FinishSessionInput } from "./schema.js";
+import { redisDelMany, redisGet, redisSet } from "../../utils/redis.js";
+
+const SESSION_HISTORY_CACHE_TTL_SECONDS = 60 * 5;
+const SESSION_DETAIL_CACHE_TTL_SECONDS = 60 * 5;
+const PREVIOUS_SESSION_CACHE_TTL_SECONDS = 60 * 5;
+
+const getSessionHistoryCacheKey = (userId: string) => `sessions:history:${userId}`;
+const getSessionDetailCacheKey = (userId: string, sessionId: string) =>
+  `sessions:detail:${userId}:${sessionId}`;
+const getPreviousSessionCacheKey = (userId: string, sessionId: string) =>
+  `sessions:previous:${userId}:${sessionId}`;
+
+const getAllSessionCacheKeys = async (userId: string) => {
+  const sessions = await db
+    .select({ id: workoutSessions.id })
+    .from(workoutSessions)
+    .where(eq(workoutSessions.user_id, userId));
+
+  return sessions.flatMap((session) => [
+    getSessionDetailCacheKey(userId, session.id),
+    getPreviousSessionCacheKey(userId, session.id),
+  ]);
+};
+
+const invalidateSessionCaches = async (userId: string, sessionId?: string) => {
+  const keys = [getSessionHistoryCacheKey(userId)];
+
+  if (sessionId) {
+    keys.push(
+      getSessionDetailCacheKey(userId, sessionId),
+      getPreviousSessionCacheKey(userId, sessionId),
+    );
+  }
+
+  const relatedKeys = await getAllSessionCacheKeys(userId);
+  await redisDelMany([...new Set([...keys, ...relatedKeys])]);
+};
 
 const assertSessionOwnership = async (userId: string, sessionId: string) => {
   const session = await db.query.workoutSessions.findFirst({
@@ -26,6 +63,8 @@ export const startSession = async (userId: string, input: StartSessionInput) => 
     description: input.description,
   }).returning();
 
+  await invalidateSessionCaches(userId, session.id);
+
   return session;
 };
 
@@ -41,6 +80,8 @@ export const logSet = async (userId: string, sessionId: string, input: LogSetInp
     rpe: input.rpe,
   }).returning();
 
+  await invalidateSessionCaches(userId, sessionId);
+
   return set;
 };
 
@@ -55,10 +96,19 @@ export const finishSession = async (userId: string, sessionId: string, input: Fi
   .where(eq(workoutSessions.id, sessionId))
   .returning();
 
+  await invalidateSessionCaches(userId, sessionId);
+
   return updatedSession;
 };
 
 export const getSessionHistory = async (userId: string) => {
+  const cacheKey = getSessionHistoryCacheKey(userId);
+  const cachedHistory = await redisGet<object[]>(cacheKey);
+
+  if (cachedHistory) {
+    return cachedHistory;
+  }
+
   const sessions = await db.query.workoutSessions.findMany({
     where: eq(workoutSessions.user_id, userId),
     with: {
@@ -72,7 +122,7 @@ export const getSessionHistory = async (userId: string) => {
     orderBy: [desc(workoutSessions.started_at)],
   });
 
-  return sessions.map(session => {
+  const history = sessions.map(session => {
     const totalVolume = session.sets.reduce((acc, set) => {
       return acc + (set.reps * (set.weight_kg ?? 0));
     }, 0);
@@ -98,9 +148,20 @@ export const getSessionHistory = async (userId: string) => {
       calories: Math.round(durationMin * 5), // Mock calculation for now
     };
   });
+
+  await redisSet(cacheKey, history, SESSION_HISTORY_CACHE_TTL_SECONDS);
+
+  return history;
 };
 
 export const getSessionDetail = async (userId: string, sessionId: string) => {
+  const cacheKey = getSessionDetailCacheKey(userId, sessionId);
+  const cachedSession = await redisGet<object>(cacheKey);
+
+  if (cachedSession) {
+    return cachedSession;
+  }
+
   const session = await db.query.workoutSessions.findFirst({
     where: and(
       eq(workoutSessions.id, sessionId),
@@ -125,10 +186,19 @@ export const getSessionDetail = async (userId: string, sessionId: string) => {
     throw { message: "Session not found", status: 404 };
   }
 
+  await redisSet(cacheKey, session, SESSION_DETAIL_CACHE_TTL_SECONDS);
+
   return session;
 };
 
 export const getPreviousSession = async (userId: string, sessionId: string) => {
+  const cacheKey = getPreviousSessionCacheKey(userId, sessionId);
+  const cachedPreviousSession = await redisGet<object | null>(cacheKey);
+
+  if (cachedPreviousSession) {
+    return cachedPreviousSession;
+  }
+
   const currentSession = await assertSessionOwnership(userId, sessionId);
 
   if (!currentSession.workout_day_id) {
@@ -161,6 +231,8 @@ export const getPreviousSession = async (userId: string, sessionId: string) => {
   if (!previousSession) {
     return null;
   }
+
+  await redisSet(cacheKey, previousSession, PREVIOUS_SESSION_CACHE_TTL_SECONDS);
 
   return previousSession;
 };

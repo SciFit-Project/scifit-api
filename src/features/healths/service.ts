@@ -2,6 +2,10 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../core/db/index.js";
 import { healthLogs } from "../../core/db/tables/health_logs.js";
 import { ManualHealthLogInput } from "./schema.js";
+import { redisDel, redisGet, redisSet } from "../../utils/redis.js";
+
+const HEALTH_SUMMARY_CACHE_TTL_SECONDS = 60 * 5;
+const getHealthSummaryCacheKey = (userId: string) => `health:summary:${userId}`;
 
 export const upsertManualHealthLog = async (
   userId: string,
@@ -21,6 +25,8 @@ export const upsertManualHealthLog = async (
       .where(eq(healthLogs.id, existing.id))
       .returning();
 
+    await redisDel(getHealthSummaryCacheKey(userId));
+
     return updated;
   }
 
@@ -33,6 +39,8 @@ export const upsertManualHealthLog = async (
       source: "MANUAL",
     })
     .returning();
+
+  await redisDel(getHealthSummaryCacheKey(userId));
 
   return created;
 };
@@ -51,10 +59,34 @@ export const deleteManualHealthLog = async (userId: string, date: string) => {
     .where(eq(healthLogs.id, existing.id))
     .returning();
 
+  await redisDel(getHealthSummaryCacheKey(userId));
+
   return deleted;
 };
 
 export const getHealthSummary = async (userId: string) => {
+  const cacheKey = getHealthSummaryCacheKey(userId);
+  const cachedSummary = await redisGet<{
+    latestBodyWeight: {
+      id: string;
+      date: string;
+      bodyWeightKg: number | null;
+      source: string;
+      createdAt: Date;
+    } | null;
+    bodyWeightLogs: Array<{
+      id: string;
+      date: string;
+      bodyWeightKg: number | null;
+      source: string;
+      createdAt: Date;
+    }>;
+  }>(cacheKey);
+
+  if (cachedSummary) {
+    return cachedSummary;
+  }
+
   const rows = await db.query.healthLogs.findMany({
     where: eq(healthLogs.user_id, userId),
     orderBy: [desc(healthLogs.date)],
@@ -71,9 +103,13 @@ export const getHealthSummary = async (userId: string) => {
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  return {
+  const summary = {
     latestBodyWeight:
       bodyWeightLogs.length === 0 ? null : bodyWeightLogs[bodyWeightLogs.length - 1],
     bodyWeightLogs,
   };
+
+  await redisSet(cacheKey, summary, HEALTH_SUMMARY_CACHE_TTL_SECONDS);
+
+  return summary;
 };

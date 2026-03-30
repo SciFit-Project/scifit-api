@@ -11,13 +11,18 @@ import plan from "./features/plan/routes.js";
 import { connectRedis } from "./core/redis/redis.js";
 
 const app = new Hono();
+const frontendOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const port = Number(process.env.PORT || 8080);
 
 app.use("*", logger());
 
 app.use(
   "*",
   cors({
-    origin: "http://localhost:3000",
+    origin: frontendOrigins,
     allowHeaders: ["Authorization", "Content-Type"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
@@ -45,7 +50,7 @@ const bootstrap = async () => {
     {
       fetch: app.fetch,
       hostname: "0.0.0.0",
-      port: 8080,
+      port,
     },
     (info) => {
       console.log(`Server is running on http://0.0.0.0:${info.port}`);

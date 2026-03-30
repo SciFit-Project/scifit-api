@@ -4,8 +4,18 @@ import { db, supabase } from "../db/index.js";
 import { users } from "../db/tables/users.js";
 import { eq } from "drizzle-orm";
 
-const JWT_SECRET = process.env.JWT_SECRET || "secret";
-const JWT_SECRET_REFRESH = process.env.JWT_SECRET_REFRESH || "refresh_secret";
+const getRequiredEnv = (key: string) => {
+  const value = process.env[key];
+
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+
+  return value;
+};
+
+const JWT_SECRET = getRequiredEnv("JWT_SECRET");
+const JWT_SECRET_REFRESH = getRequiredEnv("JWT_SECRET_REFRESH");
 
 export const authMiddleware = async (c: Context, next: Next) => {
   const authHeader = c.req.header("Authorization");

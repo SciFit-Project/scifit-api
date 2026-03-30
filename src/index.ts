@@ -8,6 +8,7 @@ import exercises from "./features/exercises/routes.js";
 import sessions from "./features/sessions/routes.js";
 import health from "./features/healths/routes.js";
 import plan from "./features/plan/routes.js";
+import { connectRedis } from "./core/redis/redis.js";
 
 const app = new Hono();
 
@@ -37,15 +38,24 @@ app.route("/api/health", health);
 
 app.get("/", (c) => c.json({ status: "ok" }));
 
-serve(
-  {
-    fetch: app.fetch,
-    hostname: "0.0.0.0",
-    port: 8080,
-  },
-  (info) => {
-    console.log(`Server is running on http://0.0.0.0:${info.port}`);
-  },
-);
+const bootstrap = async () => {
+  await connectRedis();
+
+  serve(
+    {
+      fetch: app.fetch,
+      hostname: "0.0.0.0",
+      port: 8080,
+    },
+    (info) => {
+      console.log(`Server is running on http://0.0.0.0:${info.port}`);
+    },
+  );
+};
+
+bootstrap().catch((error) => {
+  console.error("Failed to start application", error);
+  process.exit(1);
+});
 
 export default app;

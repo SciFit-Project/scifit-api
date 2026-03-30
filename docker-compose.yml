@@ -1,10 +1,30 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:?8080}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?}
+      SUPABASE_URL: ${SUPABASE_URL:?}
+      SUPABASE_URL_CONNECT: ${SUPABASE_URL_CONNECT:?}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?}
+      JWT_SECRET: ${JWT_SECRET:?}
+      JWT_SECRET_REFRESH: ${JWT_SECRET_REFRESH:?}
+      BCRYPT_SALT: ${BCRYPT_SALT:?10}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - "8080"
+
   redis:
     image: redis:7-alpine
-    container_name: scifit-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
     healthcheck:
